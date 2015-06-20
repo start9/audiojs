@@ -16,6 +16,10 @@ createAudioServer( { inputSampleRate : 32768, channelCount : 2 } ).then( server 
 } );
 ```
 
+## Example
+
+A demo is available [here](http://start9.github.io/taisel/example/) (the source code is [there](https://github.com/start9/taisel/blob/gh-pages/example/main.js)).
+
 ## License
 
 > Copyright © 2011-2015 Taisel
