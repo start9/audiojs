@@ -72,6 +72,12 @@ export class AudioServer {
 
     }
 
+    setVolume( volume ) {
+
+        this.volume = Math.max( 0.0, Math.min( volume, 1.0 ) );
+
+    }
+
     writeAudio( samples ) {
 
         throw new Error( 'Not implemented' );
