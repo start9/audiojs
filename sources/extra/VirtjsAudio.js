@@ -4,8 +4,19 @@ export class VirtjsAudio {
 
     constructor( { } = { } ) {
 
+        this.volume = 1.0;
+
         this._flagstone = null;
         this._server = null;
+
+    }
+
+    setVolume( volume ) {
+
+        if ( this._server )
+            this._server.setVolume( volume );
+
+        this.volume = volume;
 
     }
 
@@ -33,6 +44,8 @@ export class VirtjsAudio {
                 return ;
 
             this._server = server;
+
+            this._server.setVolume( this.volume );
 
         } );
 
