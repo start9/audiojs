@@ -6,7 +6,8 @@
   "scripts": {
     "build": "webpack",
     "prepublish": "npm run build",
-    "lint": "find sources \\( -name '*.js' -a -not -name '*.test.js' -a -not -name '.eslintrc.js' \\) -exec eslint {} +"
+    "lint": "find sources \\( -name '*.js' -a -not -name '*.test.js' -a -not -name '.eslintrc.js' \\) -exec eslint {} +",
+    "gh-pages": "(git checkout gh-pages && git reset --hard master && npm run build && git add -f build && git commit -m gh-pages && git push -f --set-upstream origin gh-pages && git checkout -)"
   },
   "devDependencies": {
     "babel-core": "^6.8.0",
