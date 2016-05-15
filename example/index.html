@@ -8,16 +8,9 @@
         <button onclick="play && play()">Play</button>
     </body>
 
-    <script src="https://rawgit.com/taisel/XAudioJS/master/resampler.js"></script>
+    <script src="https://npmcdn.com/babel-polyfill@6.8.0/dist/polyfill.js"></script>
 
-    <script src="vendors/CoreJs-0.9.6.min.js"></script>
-
-    <script src="https://jspm.io/system.js"></script>
-
-    <script>System.paths['taisel/*'] = '../sources/*.js'</script>
-
-    <script>System.config({ transpiler: 'babel', babelOptions: { stage: 0 } })</script>
-
-    <script>System.import('~/main').then( function ( m ) { return m.main( ); } ).catch( function ( error ) { console.error( error.stack || error ) } )</script>
+    <script src="../build/main.js"></script>
+    <script src="./main.js"></script>
 
 </html>

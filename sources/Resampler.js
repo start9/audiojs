@@ -1,204 +1,218 @@
-function range( from, to ) {
+function range(from, to) {
 
-    return Array.from( new Array( to - from ), ( x, i ) => from + i );
+    return Array.from(new Array(to - from), (x, i) => from + i);
 
 }
 
-function compilePassthroughResampler( ) { return this.returnSlice ? function ( buffer ) {
+function compilePassthroughResampler() {
 
-    return buffer;
+    return this.returnSlice ? buffer => {
 
-} : function ( buffer ) {
+        return buffer;
 
-    this.outputBuffer = buffer;
+    } : buffer => {
 
-    return this.outputBuffer.length;
+        this.outputBuffer = buffer;
 
-}; }
+        return this.outputBuffer.length;
 
-function compileLinearInterpolationResampler( ) { return Function( 'buffer', `
+    };
 
-    var bufferLength = buffer.length;
-    var outputLength = this.outputBufferSize;
+}
 
-    if ( bufferLength > 0 ) {
+function compileLinearInterpolationResampler() {
 
-        var weight = this.lastWeight;
+    // eslint-disable-next-line no-new-func
+    return Function(`buffer`, `
 
-        var firstWeight = 0;
-        var secondWeight = 0;
+        var bufferLength = buffer.length;
+        var outputLength = this.outputBufferSize;
 
-        var inputOffset = 0;
-        var outputOffset = 0;
+        if ( bufferLength > 0 ) {
 
-        for ( ; weight < 1; weight += ${this.ratioWeight} ) {
+            var weight = this.lastWeight;
 
-            secondWeight = weight % 1;
-            firstWeight = 1 - secondWeight;
+            var firstWeight = 0;
+            var secondWeight = 0;
 
-            ${[for (t of range(0, this.channelCount)) `
-                this.outputBuffer[ outputOffset ++ ] = ( this.lastOutput[ ${t} ] * firstWeight ) + ( buffer[ ${t} ] * secondWeight );
-            `].join('')}
+            var inputOffset = 0;
+            var outputOffset = 0;
 
-        }
+            for ( ; weight < 1; weight += ${this.ratioWeight} ) {
 
-        weight -= 1;
+                secondWeight = weight % 1;
+                firstWeight = 1 - secondWeight;
 
-        bufferLength -= ${this.channelCount};
-        inputOffset = Math.floor( weight ) * ${this.channelCount};
+                ${range(0, this.channelCount).map(t => `
+                    this.outputBuffer[ outputOffset ++ ] = ( this.lastOutput[ ${t} ] * firstWeight ) + ( buffer[ ${t} ] * secondWeight );
+                `).join(``)}
 
-        while ( outputOffset < outputLength && inputOffset < bufferLength ) {
+            }
 
-            secondWeight = weight % 1;
-            firstWeight = 1 - secondWeight;
+            weight -= 1;
 
-            ${[for (t of range(0, this.channelCount)) `
-                this.outputBuffer[ outputOffset ++ ] = ( buffer[ inputOffset${t > 0 ? ` + ${t}` : ``} ] * firstWeight ) + ( buffer[ inputOffset + ${this.channelCount + t} ] * secondWeight );
-            `].join('')}
-
-            weight += ${this.ratioWeight};
+            bufferLength -= ${this.channelCount};
             inputOffset = Math.floor( weight ) * ${this.channelCount};
 
+            while ( outputOffset < outputLength && inputOffset < bufferLength ) {
+
+                secondWeight = weight % 1;
+                firstWeight = 1 - secondWeight;
+
+                ${range(0, this.channelCount).map(t => `
+                    this.outputBuffer[ outputOffset ++ ] = ( buffer[ inputOffset${t > 0 ? ` + ${t}` : ``} ] * firstWeight ) + ( buffer[ inputOffset + ${this.channelCount + t} ] * secondWeight );
+                `).join(``)}
+
+                weight += ${this.ratioWeight};
+                inputOffset = Math.floor( weight ) * ${this.channelCount};
+
+            }
+
+            ${range(0, this.channelCount).map(t => `
+                this.lastOutput[ ${t} ] = buffer[ inputOffset ++ ];
+            `).join(``)}
+
+            this.lastWeight = weight % 1;
+
+            ${this.returnSlice ? `
+                return this.outputBuffer.subarray( 0, outputOffset );
+            ` : `
+                return outputOffset;
+            `}
+
+        } else {
+
+            ${this.returnSlice ? `
+                return this.outputBuffer.subarray( 0, 0 );
+            ` : `
+                return 0;
+            `}
+
         }
 
-        ${[for (t of range(0, this.channelCount)) `
-            this.lastOutput[ ${t} ] = buffer[ inputOffset ++ ];
-        `].join('')}
+    `);
 
-        this.lastWeight = weight % 1;
+}
 
-        ${this.returnSlice ? `
-            return this.outputBuffer.subarray( 0, outputOffset );
-        ` : `
-            return outputOffset;
-        `}
+function compileMultiTapResampler() {
 
-    } else {
+    // eslint-disable-next-line no-new-func
+    return Function(`buffer`, `
 
-        ${this.returnSlice ? `
-            return this.outputBuffer.subarray( 0, 0 );
-        ` : `
-            return 0;
-        `}
+        var bufferLength = buffer.length;
+        var outputLength = this.outputBufferSize;
 
-    }
+        if ( bufferLength > 0 ) {
 
-` ); }
+            var weight = 0;
 
-function compileMultiTapResampler( ) { return Function( 'buffer', `
+            ${range(0, this.channelCount).map(t => `
+                var output${t} = 0;
+            `).join(``)}
 
-    var bufferLength = buffer.length;
-    var outputLength = this.outputBufferSize;
+            var actualPosition = 0;
+            var amountToNext = 0;
+            var alreadyProcessedTail = !this.tailExists;
+            var outputBuffer = this.outputBuffer;
+            var outputOffset = 0;
+            var currentPosition = 0;
 
-    if ( bufferLength > 0 ) {
+            this.tailExists = false;
 
-        var weight = 0;
+            do {
 
-        ${[for (t of range(0, this.channelCount)) `
-            var output${t} = 0;
-        `].join('')}
+                if ( alreadyProcessedTail ) {
 
-        var actualPosition = 0;
-        var amountToNext = 0;
-        var alreadyProcessedTail = !this.tailExists;
-        var outputBuffer = this.outputBuffer;
-        var outputOffset = 0;
-        var currentPosition = 0;
+                    weight = ${this.ratioWeight};
 
-        this.tailExists = false;
-
-        do {
-
-            if ( alreadyProcessedTail ) {
-
-                weight = ${this.ratioWeight};
-
-                ${[for (t of range(0, this.channelCount)) `
-                    output${t} = 0;
-                `].join('')}
-
-            } else {
-
-                alreadyProcessedTail = true;
-                weight = this.lastWeight;
-
-                ${[for (t of range(0, this.channelCount)) `
-                    output${t} = this.lastOutput[ ${t} ];
-                `].join('')}
-
-            }
-
-            while ( weight > 0 && actualPosition < bufferLength ) {
-
-                amountToNext = 1 + actualPosition - currentPosition;
-
-                if ( weight >= amountToNext ) {
-
-                    ${[for (t of range(0, this.channelCount)) `
-                        output${t} += buffer[ actualPoition ++ ] * amountToNext;
-                    `].join('')}
-
-                    currentPosition = actualPosition;
-                    weight -= amountToNext;
+                    ${range(0, this.channelCount).map(t => `
+                        output${t} = 0;
+                    `).join(``)}
 
                 } else {
 
-                    ${[for (t of range(0, this.channelCount)) `
-                        output${t} += buffer[ actualPosition${t > 0 ? ` + ${t}` : ''} ] * weight;
-                    `].join('')}
+                    alreadyProcessedTail = true;
+                    weight = this.lastWeight;
 
-                    currentPosition += weight;
-                    weight = 0;
-
-                    break ;
+                    ${range(0, this.channelCount).map(t => `
+                        output${t} = this.lastOutput[ ${t} ];
+                    `).join(``)}
 
                 }
 
-                if ( weight <= 0 ) {
+                while ( weight > 0 && actualPosition < bufferLength ) {
 
-                    ${[for (t of range(0, this.channelCount)) `
-                        outputBuffer[ outputOffset ++ ] = output${t} / ${this.ratioWeight};
-                    `].join('')}
+                    amountToNext = 1 + actualPosition - currentPosition;
 
-                } else {
+                    if ( weight >= amountToNext ) {
 
-                    this.lastWeight = weight;
+                        ${range(0, this.channelCount).map(t => `
+                            output${t} += buffer[ actualPoition ++ ] * amountToNext;
+                        `).join(``)}
 
-                    ${[for (t of range(0, this.channelCount)) `
-                        this.lastOutput[ ${t} ] = output${t};
-                    `].join('')}
+                        currentPosition = actualPosition;
+                        weight -= amountToNext;
 
-                    this.tailExists = true;
+                    } else {
 
-                    break ;
+                        ${range(0, this.channelCount).map(t => `
+                            output${t} += buffer[ actualPosition${t > 0 ? ` + ${t}` : ``} ] * weight;
+                        `).join(``)}
+
+                        currentPosition += weight;
+                        weight = 0;
+
+                        break ;
+
+                    }
+
+                    if ( weight <= 0 ) {
+
+                        ${range(0, this.channelCount).map(t => `
+                            outputBuffer[ outputOffset ++ ] = output${t} / ${this.ratioWeight};
+                        `).join(``)}
+
+                    } else {
+
+                        this.lastWeight = weight;
+
+                        ${range(0, this.channelCount).map(t => `
+                            this.lastOutput[ ${t} ] = output${t};
+                        `).join(``)}
+
+                        this.tailExists = true;
+
+                        break ;
+
+                    }
 
                 }
 
-            }
+            } while ( actualPosition < bufferLength && outputOffset < outputLength );
 
-        } while ( actualPosition < bufferLength && outputOffset < outputLength );
+            ${this.returnSlice ? `
+                return this.outputBuffer.subarray( 0, outputOffset );
+            ` : `
+                return outputOffset;
+            `}
 
-        ${this.returnSlice ? `
-            return this.outputBuffer.subarray( 0, outputOffset );
-        ` : `
-            return outputOffset;
-        `}
+        } else {
 
-    } else {
+            ${this.returnSlice ? `
+                return this.outputBuffer.subarray( 0, 0 );
+            ` : `
+                return 0;
+            `}
 
-        ${this.returnSlice ? `
-            return this.outputBuffer.subarray( 0, 0 );
-        ` : `
-            return 0;
-        `}
+        }
 
-    }
+    `);
 
-` ); }
+}
 
 export class Resampler {
 
-    constructor( {
+    constructor({
 
         inputSampleRate,
         outputSampleRate,
@@ -209,7 +223,7 @@ export class Resampler {
 
         returnSlice = true
 
-    } = { } ) {
+    } = { }) {
 
         this.inputSampleRate = inputSampleRate;
         this.outputSampleRate = outputSampleRate;
@@ -218,14 +232,14 @@ export class Resampler {
 
         this.outputBufferSize = outputBufferSize;
 
-        this.outputBuffer = new Float32Array( this.outputBufferSize );
-        this.lastOutput = new Float32Array( this.channelCount );
+        this.outputBuffer = new Float32Array(this.outputBufferSize);
+        this.lastOutput = new Float32Array(this.channelCount);
 
         this.returnSlice = returnSlice;
 
-        if ( this.inputSampleRate === this.outputSampleRate ) {
+        if (this.inputSampleRate === this.outputSampleRate) {
 
-            this.resample = compilePassthroughResampler.call( this );
+            this.resample = Reflect.apply(compilePassthroughResampler, this, []);
 
             this.ratioWeight = 1;
 
@@ -233,15 +247,15 @@ export class Resampler {
 
             this.ratioWeight = this.inputSampleRate / this.outputSampleRate;
 
-            if ( this.inputSampleRate < this.outputSampleRate ) {
+            if (this.inputSampleRate < this.outputSampleRate) {
 
-                this.resample = compileLinearInterpolationResampler.call( this );
+                this.resample = Reflect.apply(compileLinearInterpolationResampler, this, []);
 
                 this.lastWeight = 1;
 
-            } else if ( this.inputSampleRate > this.outputSampleRate ) {
+            } else if (this.inputSampleRate > this.outputSampleRate) {
 
-                this.resample = compileMultiTapResampler.call( this );
+                this.resample = Reflect.apply(compileMultiTapResampler, this, []);
 
                 this.tailExists = false;
                 this.lastWeight = 0;

@@ -1,7 +1,7 @@
-import { WebAudioServer } from './implementations/WebAudioServer';
+import { WebAudioServer } from 'audiojs/implementations/WebAudioServer';
 
-export function createAudioServer( options ) {
+export function createAudioServer(options) {
 
-    return WebAudioServer.create( options );
+    return WebAudioServer.create(options);
 
 }
