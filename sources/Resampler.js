@@ -147,7 +147,7 @@ function compileMultiTapResampler() {
                     if ( weight >= amountToNext ) {
 
                         ${range(0, this.channelCount).map(t => `
-                            output${t} += buffer[ actualPoition ++ ] * amountToNext;
+                            output${t} += buffer[ actualPosition ++ ] * amountToNext;
                         `).join(``)}
 
                         currentPosition = actualPosition;
